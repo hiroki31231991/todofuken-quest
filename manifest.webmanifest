@@ -1,0 +1,19 @@
+{
+  "name": "都道府県クエスト",
+  "short_name": "都道府県Q",
+  "description": "都道府県をクイズで学ぶレトロRPG型教材",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

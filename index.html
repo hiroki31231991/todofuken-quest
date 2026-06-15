@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="都道府県クエスト">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="都道府県をクイズで学ぶレトロRPG型教材">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>都道府県クエスト ～47の宝をさがす旅～</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { height:100%; background:#000; }
+  body {
+    font-family:"ＭＳ ゴシック","MS Gothic","Osaka-Mono","Hiragino Maru Gothic ProN",monospace;
+    color:#fff; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #game-wrap { position:relative; width:100%; max-width:520px; }
+  #field-canvas { display:block; width:100%; image-rendering:pixelated; background:#000; }
+
+  /* ===== ドラクエ風ウィンドウ ===== */
+  .dq-win {
+    background:#000;
+    border:3px solid #fff; border-radius:6px;
+    box-shadow:0 0 0 3px #000, inset 0 0 0 2px #000;
+    padding:10px 12px; line-height:1.7; font-size:15px;
+    color:#fff;
+  }
+  .dq-title { color:#ffd700; font-weight:bold; }
+
+  /* ===== メッセージウィンドウ ===== */
+  #msg-win {
+    display:none; position:absolute; left:2%; right:2%; bottom:2%;
+    min-height:84px; z-index:30; white-space:pre-wrap;
+  }
+  #msg-win .next-arrow { display:none; text-align:center; animation:blink 0.7s infinite; }
+  @keyframes blink { 50%{opacity:0} }
+
+  /* ===== 選択ウィンドウ ===== */
+  #choice-win {
+    display:none; position:absolute; right:2%; bottom:108px; z-index:31;
+    min-width:46%; max-width:96%;
+  }
+  .choice-item { padding:3px 4px 3px 22px; position:relative; cursor:pointer; font-size:15px; }
+  .choice-item small { color:#9ad; font-size:11px; }
+  .choice-item.sel::before { content:"▶"; position:absolute; left:2px; animation:blink 0.7s infinite; }
+  #choice-caption { color:#ffd700; font-size:13px; margin-bottom:2px; }
+
+  /* ===== バトル画面 ===== */
+  #battle-layer {
+    display:none; position:absolute; inset:0; z-index:20;
+    background:#000;
+  }
+  #battle-scene {
+    position:absolute; top:0; left:0; right:0; height:62%;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 80%, #2a2a4e 0%, #0a0a18 70%);
+    overflow:hidden;
+  }
+  #battle-scene.boss-bg { background:radial-gradient(ellipse at 50% 80%, #4e1a1a 0%, #180808 70%); }
+  #monster-canvas { image-rendering:pixelated; transition:opacity 0.5s; }
+  #monster-canvas.hit { animation:mhit 0.4s; }
+  @keyframes mhit { 0%,100%{transform:translateX(0);filter:none} 25%{transform:translateX(-10px);filter:brightness(3)} 50%{transform:translateX(10px);filter:brightness(3)} 75%{transform:translateX(-6px)} }
+  #monster-canvas.dead { opacity:0; transform:scale(0.6); transition:all 0.6s; }
+  #monster-ground {
+    position:absolute; bottom:10%; left:50%; transform:translateX(-50%);
+    width:180px; height:34px; border-radius:50%; background:rgba(0,0,0,0.5);
+  }
+  #battle-hud {
+    position:absolute; top:6px; left:6px; z-index:22; font-size:13px; padding:6px 10px; line-height:1.6;
+  }
+  #monster-hud {
+    position:absolute; top:6px; right:6px; z-index:22; font-size:13px; padding:6px 10px; text-align:center;
+  }
+  #monster-hpbar { width:110px; height:8px; border:1px solid #fff; margin-top:3px; }
+  #monster-hpbar div { height:100%; background:#e33; transition:width 0.4s; }
+  #battle-flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:25; }
+  #battle-flash.go { animation:bflash 0.3s; }
+  @keyframes bflash { 0%{opacity:0.9} 100%{opacity:0} }
+  #battle-layer.hero-hit { animation:hhit 0.4s; }
+  @keyframes hhit { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-8px,4px)} 50%{transform:translate(8px,-4px)} 75%{transform:translate(-5px,2px)} }
+  .dmg-pop {
+    position:absolute; z-index:26; font-size:30px; font-weight:bold; color:#fff;
+    text-shadow:2px 2px 0 #000; pointer-events:none; animation:dmgpop 0.8s forwards;
+  }
+  @keyframes dmgpop { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-44px);opacity:0} }
+
+  /* ===== クイズウィンドウ ===== */
+  #quiz-win {
+    display:none; position:absolute; left:2%; right:2%; top:4%; z-index:32;
+  }
+  #quiz-type { color:#7df; font-size:12px; }
+  #quiz-text { font-size:16px; line-height:1.7; margin:4px 0 8px; }
+  .quiz-opt { padding:4px 4px 4px 24px; position:relative; cursor:pointer; font-size:15px; border-radius:4px; }
+  .quiz-opt small { color:#9ad; font-size:11px; margin-left:6px; }
+  .quiz-opt.sel::before { content:"▶"; position:absolute; left:4px; animation:blink 0.7s infinite; }
+  .quiz-opt.ok { background:#063; }
+  .quiz-opt.ng { background:#702; }
+
+  /* ===== タイトル ===== */
+  #title-layer {
+    display:flex; position:absolute; inset:0; z-index:50; background:#000;
+    flex-direction:column; align-items:center; justify-content:center; text-align:center;
+  }
+  #title-logo { font-size:34px; font-weight:bold; color:#ffd700; text-shadow:3px 3px 0 #803; line-height:1.4; letter-spacing:2px; }
+  #title-sub { color:#7df; margin:8px 0 30px; font-size:14px; }
+  .title-menu-item { font-size:18px; padding:6px 8px 6px 30px; position:relative; cursor:pointer; }
+  .title-menu-item.sel::before { content:"▶"; position:absolute; left:6px; animation:blink 0.7s infinite; }
+  #title-hint { position:absolute; bottom:14px; font-size:11px; color:#888; width:100%; text-align:center; line-height:1.8; }
+
+  /* ===== なまえ入力 ===== */
+  #name-layer { display:none; position:absolute; inset:0; z-index:50; background:#000; padding:20px; }
+  #name-layer .dq-win { margin-top:30px; }
+  #input-name {
+    width:100%; padding:10px; font-size:18px; text-align:center; margin:10px 0;
+    background:#111; color:#fff; border:2px solid #fff; border-radius:4px; font-family:inherit;
+  }
+  .avatar-row { display:flex; justify-content:center; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  .avatar-pick { border:2px solid #555; border-radius:6px; padding:4px; cursor:pointer; background:#111; }
+  .avatar-pick.sel { border-color:#ffd700; background:#332; }
+  .avatar-pick canvas { display:block; image-rendering:pixelated; }
+  #btn-name-ok {
+    display:block; margin:14px auto 0; padding:10px 30px; font-size:17px; font-family:inherit;
+    background:#000; color:#fff; border:3px solid #fff; border-radius:6px; cursor:pointer;
+  }
+
+  /* ===== エンディング ===== */
+  #ending-layer { display:none; position:absolute; inset:0; z-index:60; background:#000; overflow-y:auto; padding:18px; }
+  .cert { border:4px double #ffd700; border-radius:8px; padding:24px 14px; text-align:center; margin-top:20px; }
+  .cert h2 { color:#ffd700; font-size:21px; letter-spacing:3px; }
+  .cert-name { font-size:24px; font-weight:bold; margin:14px 0 4px; border-bottom:2px solid #ffd700; display:inline-block; padding:0 16px 4px; }
+  .cert p { font-size:13px; line-height:2; color:#ccc; margin-top:10px; }
+  .cert-date { font-size:12px; color:#888; margin-top:8px; }
+  .confetti { position:fixed; top:-10px; font-size:20px; animation:fall linear forwards; pointer-events:none; z-index:70; }
+  @keyframes fall { to { transform:translateY(110vh) rotate(720deg); } }
+  #btn-ending { display:block; margin:18px auto; padding:10px 26px; font-size:16px; font-family:inherit; background:#000; color:#fff; border:3px solid #fff; border-radius:6px; cursor:pointer; }
+
+  /* ===== コントローラ ===== */
+  #pad-layer { position:fixed; inset:0; pointer-events:none; z-index:40; }
+  #dpad { position:absolute; left:10px; bottom:14px; width:132px; height:132px; pointer-events:auto; opacity:0.85; }
+  .dbtn {
+    position:absolute; width:44px; height:44px; background:#222; border:2px solid #777;
+    border-radius:8px; color:#ccc; font-size:18px; display:flex; align-items:center; justify-content:center;
+  }
+  .dbtn:active { background:#555; }
+  #d-up{left:44px;top:0} #d-down{left:44px;bottom:0} #d-left{left:0;top:44px} #d-right{right:0;top:44px}
+  #ab-box { position:absolute; right:12px; bottom:20px; pointer-events:auto; display:flex; gap:12px; align-items:flex-end; }
+  .abtn {
+    width:58px; height:58px; border-radius:50%; background:#812; border:3px solid #d66;
+    color:#fff; font-size:17px; font-weight:bold; display:flex; align-items:center; justify-content:center;
+  }
+  .abtn:active { background:#c34; }
+  #btn-b { width:48px; height:48px; background:#226; border-color:#66d; font-size:14px; }
+  #btn-b:active { background:#33a; }
+  @media (min-width:760px){ #dpad,#ab-box{ display:none; } }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="field-canvas" width="480" height="416"></canvas>
+
+  <!-- バトル -->
+  <div id="battle-layer">
+    <div id="battle-scene">
+      <div id="monster-ground"></div>
+      <canvas id="monster-canvas" width="160" height="160"></canvas>
+    </div>
+    <div class="dq-win" id="battle-hud"></div>
+    <div class="dq-win" id="monster-hud">
+      <span id="monster-hud-name"></span>
+      <div id="monster-hpbar"><div></div></div>
+    </div>
+    <div id="battle-flash"></div>
+  </div>
+
+  <!-- クイズ -->
+  <div class="dq-win" id="quiz-win">
+    <div id="quiz-type"></div>
+    <div id="quiz-text"></div>
+    <div id="quiz-opts"></div>
+  </div>
+
+  <!-- 選択肢 -->
+  <div class="dq-win" id="choice-win">
+    <div id="choice-caption"></div>
+    <div id="choice-items"></div>
+  </div>
+
+  <!-- メッセージ -->
+  <div class="dq-win" id="msg-win"><span id="msg-text"></span><div class="next-arrow">▼</div></div>
+
+  <!-- タイトル -->
+  <div id="title-layer">
+    <div id="title-logo">都道府県クエスト</div>
+    <div id="title-sub">～４７の宝をさがす旅～</div>
+    <div class="dq-win" style="min-width:240px">
+      <div class="title-menu-item" data-act="new">はじめから</div>
+      <div class="title-menu-item" data-act="cont" id="title-cont" style="display:none">つづきから</div>
+      <div class="title-menu-item" data-act="sound">おと：ON</div>
+    </div>
+    <div id="title-hint">クイズでこうげき！ボスをたおして日本をすくえ！<br>そうさ：やじるしキー＋Enter ／ スマホは画面のボタン</div>
+  </div>
+
+  <!-- なまえ -->
+  <div id="name-layer">
+    <div class="dq-win">
+      <div class="dq-title">ゆうしゃの なまえは？</div>
+      <input id="input-name" type="text" maxlength="8" placeholder="なまえを いれてね">
+      <div class="dq-title">すがたを えらぼう</div>
+      <div class="avatar-row" id="avatar-row"></div>
+      <button id="btn-name-ok">ぼうけんに でる！</button>
+    </div>
+  </div>
+
+  <!-- エンディング -->
+  <div id="ending-layer">
+    <div class="cert">
+      <h2>🏆 にんてい証 🏆</h2>
+      <div class="cert-name" id="cert-name"></div>
+      <p>あなたを<b style="color:#ffd700">「４７都道府県マスター」</b>に<br>にんていします！<br>８つの地方すべての宝を とりもどし<br>日本に へいわが もどりました。</p>
+      <div style="font-size:24px;letter-spacing:6px;margin:10px 0" id="cert-treasures"></div>
+      <p id="cert-level" style="color:#f88"></p>
+      <div class="cert-date" id="cert-date"></div>
+    </div>
+    <button id="btn-ending">フィールドに もどる</button>
+  </div>
+
+  <!-- コントローラ -->
+  <div id="pad-layer">
+    <div id="dpad">
+      <div class="dbtn" id="d-up">▲</div>
+      <div class="dbtn" id="d-down">▼</div>
+      <div class="dbtn" id="d-left">◀</div>
+      <div class="dbtn" id="d-right">▶</div>
+    </div>
+    <div id="ab-box">
+      <div class="abtn" id="btn-b">メニュー</div>
+      <div class="abtn" id="btn-a">Ａ</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================
+   都道府県クエスト ～47の宝をさがす旅～（レトロRPG版）
+   対象：小学4年生。ドット絵フィールドを歩いて日本縦断、
+   クイズバトルで8地方のボスをたおす本格RPG風学習ゲーム。
+   ===================================================== */
+
+// ================= データ：地方 =================
+const REGIONS = [
+  { name:"北海道地方",   treasure:"💎", treasureName:"ゆきのクリスタル" },
+  { name:"東北地方",     treasure:"🍎", treasureName:"おうごんのりんご" },
+  { name:"関東地方",     treasure:"🗼", treasureName:"ひかりのタワー" },
+  { name:"中部地方",     treasure:"🗻", treasureName:"ふじさんのいただき" },
+  { name:"近畿地方",     treasure:"🛡️", treasureName:"だいぶつのおまもり" },
+  { name:"中国地方",     treasure:"⏳", treasureName:"さきゅうのすなどけい" },
+  { name:"四国地方",     treasure:"🌀", treasureName:"うずしおのしんじゅ" },
+  { name:"九州・沖縄地方", treasure:"🌺", treasureName:"たいようのサンゴ" },
+];
+
+// ================= データ：47都道府県 =================
+const PREFS = [
+  { n:"北海道",  k:"ほっかいどう", c:"札幌市",   ck:"さっぽろし",   r:0, f:["さっぽろ雪まつり","じゃがいもの生産日本一"], h:"日本でいちばん北にあって、いちばん広い都道府県" },
+  { n:"青森県",  k:"あおもりけん", c:"青森市",   ck:"あおもりし",   r:1, f:["りんごの生産日本一","ねぶた祭"], h:"本州のいちばん北にある県" },
+  { n:"岩手県",  k:"いわてけん",   c:"盛岡市",   ck:"もりおかし",   r:1, f:["わんこそば","南部鉄器"], h:"北海道の次に面積が大きい。東北地方の太平洋側" },
+  { n:"宮城県",  k:"みやぎけん",   c:"仙台市",   ck:"せんだいし",   r:1, f:["仙台七夕まつり","牛タン"], h:"東北地方でいちばん人口が多い県" },
+  { n:"秋田県",  k:"あきたけん",   c:"秋田市",   ck:"あきたし",     r:1, f:["なまはげ","秋田犬"], h:"東北地方の日本海側。お米づくりがさかん" },
+  { n:"山形県",  k:"やまがたけん", c:"山形市",   ck:"やまがたし",   r:1, f:["さくらんぼの生産日本一","いも煮会"], h:"東北地方の日本海側。くだものづくりがさかん" },
+  { n:"福島県",  k:"ふくしまけん", c:"福島市",   ck:"ふくしまし",   r:1, f:["あかべこ(赤い牛の人形)","会津の鶴ヶ城"], h:"全国で3番目に広い。東北地方のいちばん南" },
+  { n:"茨城県",  k:"いばらきけん", c:"水戸市",   ck:"みとし",       r:2, f:["納豆(なっとう)","メロンの生産日本一"], h:"関東地方の北東がわ。太平洋に面している" },
+  { n:"栃木県",  k:"とちぎけん",   c:"宇都宮市", ck:"うつのみやし", r:2, f:["いちご『とちおとめ』","日光東照宮"], h:"関東地方の北がわ。海のない県" },
+  { n:"群馬県",  k:"ぐんまけん",   c:"前橋市",   ck:"まえばしし",   r:2, f:["草津温泉","こんにゃくいもの生産日本一"], h:"関東地方の北西がわ。海のない県で温泉がいっぱい" },
+  { n:"埼玉県",  k:"さいたまけん", c:"さいたま市", ck:"さいたまし", r:2, f:["草加せんべい","ひな人形づくり"], h:"東京都の北どなり。海のない県" },
+  { n:"千葉県",  k:"ちばけん",     c:"千葉市",   ck:"ちばし",       r:2, f:["落花生(ピーナッツ)の生産日本一","成田国際空港"], h:"房総半島の県。三方を海にかこまれている" },
+  { n:"東京都",  k:"とうきょうと", c:"東京",     ck:"とうきょう",   r:2, f:["日本の首都","東京スカイツリー"], h:"日本の首都。人口が日本一多い" },
+  { n:"神奈川県", k:"かながわけん", c:"横浜市",  ck:"よこはまし",   r:2, f:["横浜中華街","鎌倉の大仏"], h:"東京都の南どなり。大きな港町がある" },
+  { n:"新潟県",  k:"にいがたけん", c:"新潟市",   ck:"にいがたし",   r:3, f:["お米『コシヒカリ』","佐渡島のトキ"], h:"日本海側にあり、お米づくりがとてもさかん" },
+  { n:"富山県",  k:"とやまけん",   c:"富山市",   ck:"とやまし",     r:3, f:["ホタルイカ","チューリップの球根づくり"], h:"中部地方の日本海側。高い山々(立山連峰)が見える" },
+  { n:"石川県",  k:"いしかわけん", c:"金沢市",   ck:"かなざわし",   r:3, f:["金ぱく(金箔)づくり日本一","輪島塗(わじまぬり)"], h:"日本海につきでた能登半島がある県" },
+  { n:"福井県",  k:"ふくいけん",   c:"福井市",   ck:"ふくいし",     r:3, f:["めがねフレームづくり日本一","恐竜の化石はっくつ"], h:"中部地方の日本海側。きょうりゅうの化石で有名" },
+  { n:"山梨県",  k:"やまなしけん", c:"甲府市",   ck:"こうふし",     r:3, f:["ぶどうとももの生産日本一","富士五湖"], h:"海のない県。富士山の北がわにある" },
+  { n:"長野県",  k:"ながのけん",   c:"長野市",   ck:"ながのし",     r:3, f:["レタスの生産日本一","軽井沢(ひるがおの避暑地)"], h:"となりあう県の数が日本一(8県)。海のない県" },
+  { n:"岐阜県",  k:"ぎふけん",     c:"岐阜市",   ck:"ぎふし",       r:3, f:["白川郷(世界遺産)","長良川の鵜飼(うかい)"], h:"海のない県。日本のまんなかあたりにある" },
+  { n:"静岡県",  k:"しずおかけん", c:"静岡市",   ck:"しずおかし",   r:3, f:["お茶の生産がさかん","うなぎのようしょく(浜名湖)"], h:"太平洋側。富士山の南がわにある" },
+  { n:"愛知県",  k:"あいちけん",   c:"名古屋市", ck:"なごやし",     r:3, f:["自動車づくり日本一","名古屋城の金のしゃちほこ"], h:"中部地方の太平洋側。工業がとてもさかん" },
+  { n:"三重県",  k:"みえけん",     c:"津市",     ck:"つし",         r:4, f:["伊勢神宮","真珠(しんじゅ)のようしょく"], h:"近畿地方の東がわ。県庁所在地の名前は日本一みじかい" },
+  { n:"滋賀県",  k:"しがけん",     c:"大津市",   ck:"おおつし",     r:4, f:["日本一大きい湖・琵琶湖","彦根城とひこにゃん"], h:"県のまんなかに日本一大きい湖がある" },
+  { n:"京都府",  k:"きょうとふ",   c:"京都市",   ck:"きょうとし",   r:4, f:["金閣寺","祇園祭"], h:"むかし都があった。お寺や神社がたくさんある" },
+  { n:"大阪府",  k:"おおさかふ",   c:"大阪市",   ck:"おおさかし",   r:4, f:["たこ焼き","大阪城"], h:"西日本でいちばん人口が多い。「天下の台所」とよばれた" },
+  { n:"兵庫県",  k:"ひょうごけん", c:"神戸市",   ck:"こうべし",     r:4, f:["姫路城(世界遺産)","明石海峡大橋"], h:"日本海と瀬戸内海、2つの海に面している県" },
+  { n:"奈良県",  k:"ならけん",     c:"奈良市",   ck:"ならし",       r:4, f:["東大寺の大仏","奈良公園の鹿"], h:"海のない県。大仏と鹿で有名" },
+  { n:"和歌山県", k:"わかやまけん", c:"和歌山市", ck:"わかやまし",  r:4, f:["うめの生産日本一","みかんの生産日本一"], h:"紀伊半島の南西がわ。くだものづくりがさかん" },
+  { n:"鳥取県",  k:"とっとりけん", c:"鳥取市",   ck:"とっとりし",   r:5, f:["鳥取砂丘","二十世紀なし"], h:"人口がいちばん少ない県。大きな砂丘がある" },
+  { n:"島根県",  k:"しまねけん",   c:"松江市",   ck:"まつえし",     r:5, f:["出雲大社","宍道湖のしじみ"], h:"中国地方の日本海側。大きな神社で有名" },
+  { n:"岡山県",  k:"おかやまけん", c:"岡山市",   ck:"おかやまし",   r:5, f:["桃太郎のおはなし・きびだんご","倉敷の美観地区"], h:"中国地方の瀬戸内海側。晴れの日が多い" },
+  { n:"広島県",  k:"ひろしまけん", c:"広島市",   ck:"ひろしまし",   r:5, f:["原爆ドーム(世界遺産)","かきのようしょく日本一"], h:"中国地方でいちばん人口が多い。世界遺産が2つある" },
+  { n:"山口県",  k:"やまぐちけん", c:"山口市",   ck:"やまぐちし",   r:5, f:["ふぐ(下関)","秋吉台(カルスト台地)"], h:"本州のいちばん西にある県" },
+  { n:"徳島県",  k:"とくしまけん", c:"徳島市",   ck:"とくしまし",   r:6, f:["阿波おどり","鳴門のうずしお"], h:"四国の東がわ。うずしおが見られる" },
+  { n:"香川県",  k:"かがわけん",   c:"高松市",   ck:"たかまつし",   r:6, f:["さぬきうどん","小豆島のオリーブ"], h:"日本でいちばん面積が小さい県" },
+  { n:"愛媛県",  k:"えひめけん",   c:"松山市",   ck:"まつやまし",   r:6, f:["タオルづくり日本一(今治)","道後温泉"], h:"四国の北西がわ。みかんづくりがさかん" },
+  { n:"高知県",  k:"こうちけん",   c:"高知市",   ck:"こうちし",     r:6, f:["かつおの一本づり","坂本龍馬"], h:"四国の太平洋側。よさこい祭りで有名" },
+  { n:"福岡県",  k:"ふくおかけん", c:"福岡市",   ck:"ふくおかし",   r:7, f:["とんこつラーメン・明太子","博多どんたく"], h:"九州でいちばん人口が多い県" },
+  { n:"佐賀県",  k:"さがけん",     c:"佐賀市",   ck:"さがし",       r:7, f:["有田焼(焼き物)","吉野ヶ里遺跡"], h:"九州の北西がわ。焼き物の町がある" },
+  { n:"長崎県",  k:"ながさきけん", c:"長崎市",   ck:"ながさきし",   r:7, f:["カステラ","出島(江戸時代の貿易の窓口)"], h:"島の数が日本一多い県" },
+  { n:"熊本県",  k:"くまもとけん", c:"熊本市",   ck:"くまもとし",   r:7, f:["くまモン","阿蘇山(大きなカルデラ)"], h:"九州のまんなかへん。大きな火山がある" },
+  { n:"大分県",  k:"おおいたけん", c:"大分市",   ck:"おおいたし",   r:7, f:["温泉の数日本一(別府温泉)","とり天"], h:"九州の東がわ。温泉の数が日本一" },
+  { n:"宮崎県",  k:"みやざきけん", c:"宮崎市",   ck:"みやざきし",   r:7, f:["マンゴー","プロ野球・サッカーのキャンプ地"], h:"九州の南東がわ。あたたかくて日ざしがたっぷり" },
+  { n:"鹿児島県", k:"かごしまけん", c:"鹿児島市", ck:"かごしまし",  r:7, f:["桜島(火山)","さつまいも"], h:"九州本土のいちばん南。大きな火山の島がある" },
+  { n:"沖縄県",  k:"おきなわけん", c:"那覇市",   ck:"なはし",       r:7, f:["首里城","美ら海(ちゅらうみ)水族館"], h:"日本でいちばん南にある、海がきれいな島の県" },
+];
+
+// ================= データ：モンスター =================
+// sprite: スプライト名 / pal: パレット番号 / hp,atk: つよさ
+const MONSTERS = [
+  // 北海道
+  [ { name:"ゆきスライム",        sprite:"slime",  pal:0, hp:18, atk:4 },
+    { name:"ふぶきゴースト",      sprite:"ghost",  pal:0, hp:20, atk:4 },
+    { name:"こおりのまおう",      sprite:"dragon", pal:0, hp:46, atk:5, boss:true } ],
+  // 東北
+  [ { name:"りんごスライム",      sprite:"slime",  pal:1, hp:22, atk:5 },
+    { name:"なまはげオーガ",      sprite:"oni",    pal:0, hp:24, atk:5 },
+    { name:"ゆきおんなクイーン",  sprite:"ghost",  pal:1, hp:54, atk:6, boss:true } ],
+  // 関東
+  [ { name:"なっとうスライム",    sprite:"slime",  pal:2, hp:26, atk:6 },
+    { name:"とかいコウモリ",      sprite:"bat",    pal:0, hp:24, atk:6 },
+    { name:"スカイツリードラゴン", sprite:"dragon", pal:1, hp:62, atk:7, boss:true } ],
+  // 中部
+  [ { name:"ライチョウバード",    sprite:"bird",   pal:0, hp:28, atk:7 },
+    { name:"おちゃばけ",          sprite:"ghost",  pal:2, hp:30, atk:7 },
+    { name:"フジサンゴーレム",    sprite:"golem",  pal:0, hp:70, atk:8, boss:true } ],
+  // 近畿
+  [ { name:"たこやきスライム",    sprite:"slime",  pal:3, hp:32, atk:8 },
+    { name:"みやこゴースト",      sprite:"ghost",  pal:3, hp:34, atk:8 },
+    { name:"だいぶつガーディアン", sprite:"golem",  pal:1, hp:78, atk:9, boss:true } ],
+  // 中国
+  [ { name:"すなどりバード",      sprite:"bird",   pal:1, hp:36, atk:9 },
+    { name:"きびだんごオーガ",    sprite:"oni",    pal:1, hp:38, atk:9 },
+    { name:"いずもりゅう",        sprite:"dragon", pal:2, hp:86, atk:10, boss:true } ],
+  // 四国
+  [ { name:"うどんスライム",      sprite:"slime",  pal:4, hp:40, atk:10 },
+    { name:"かつおバード",        sprite:"bird",   pal:2, hp:42, atk:10 },
+    { name:"うずしおりゅう",      sprite:"dragon", pal:3, hp:94, atk:11, boss:true } ],
+  // 九州・沖縄
+  [ { name:"めんたいオーガ",      sprite:"oni",    pal:2, hp:44, atk:11 },
+    { name:"シーサーバット",      sprite:"bat",    pal:1, hp:46, atk:11 },
+    { name:"マグマキング",        sprite:"golem",  pal:2, hp:120, atk:13, boss:true } ],
+];
+
+// ================= ドット絵スプライト =================
+// 文字→パレット番号。'.'=透明 1=こい色 2=メイン 3=サブ 4=アクセント 5=白
+const SPRITE_ART = {
+  slime: [
+    "................",
+    "......1111......",
+    "....11222211....",
+    "...1222222221...",
+    "..122222222221..",
+    "..122222222221..",
+    ".12222222222221.",
+    ".12255222255221.",
+    ".12251222215221.",
+    "1222222222222221",
+    "1222222222222221",
+    "122224444442221.",
+    ".12222222222221.",
+    ".11222222222211.",
+    "..112222222211..",
+    "....11111111....",
+  ],
+  ghost: [
+    "......1111......",
+    "....11222211....",
+    "...1222222221...",
+    "..122222222221..",
+    "..125522255221..",
+    ".12251222215221.",
+    ".12222222222221.",
+    ".12222244222221.",
+    ".12222244222221.",
+    ".12222222222221.",
+    ".12222222222221.",
+    ".12222222222221.",
+    ".12212221222121.",
+    ".12122212221211.",
+    ".11.1221.221.1..",
+    ".....11...11....",
+  ],
+  bat: [
+    "................",
+    "..11........11..",
+    ".1221......1221.",
+    "1222211111122221",
+    "1222222222222221",
+    "1221222222221221",
+    ".11122222221111.",
+    "...1255225521...",
+    "...1251221521...",
+    "...1222222221...",
+    "...1224444221...",
+    "....12222221....",
+    ".....122221.....",
+    "....1221.1221...",
+    "....11....11....",
+    "................",
+  ],
+  bird: [
+    "................",
+    ".....11111......",
+    "....1222221.....",
+    "...122512251....",
+    "...122122121....",
+    "...1222222241...",
+    "..12222222244...",
+    ".1222222222241..",
+    "12232222222221..",
+    "12332322222221..",
+    "13333222222221..",
+    ".133222222221...",
+    "..11222222211...",
+    "....12211221....",
+    "....14411441....",
+    "....111..111....",
+  ],
+  oni: [
+    "...11......11...",
+    "..1551....1551..",
+    "..155111111551..",
+    "..112222222211..",
+    ".12222222222221.",
+    ".12255222255221.",
+    ".12251222215221.",
+    "1222222222222221",
+    "1222244444422221",
+    "1222241111422221",
+    ".12222444422221.",
+    ".12222222222221.",
+    "..122333333221..",
+    "..133322223331..",
+    "..1331....1331..",
+    "..111......111..",
+  ],
+  golem: [
+    "....11111111....",
+    "...1222222221...",
+    "..122222222221..",
+    "..125512255121..",
+    "..125112251121..",
+    "..122222222221..",
+    "..122244442221..",
+    ".11222222222211.",
+    "1332222222223311",
+    "1332122222213311",
+    "1332122222213311",
+    ".11122222221111.",
+    "...1222112221...",
+    "...1222112221...",
+    "..1333113331....",
+    "..1111.11111....",
+  ],
+  dragon: [
+    "...11.....11....",
+    "..1441...1441...",
+    "..144111111441..",
+    "..1222222221....",
+    ".122552255221...",
+    ".122512251221...",
+    "1222222222221...",
+    "12222444422211..",
+    ".12224111422233.",
+    ".122222222223331",
+    "..12222222233331",
+    "..12222222223311",
+    ".1322222222331..",
+    ".1332222223311..",
+    "..1331111331....",
+    "...111...111....",
+  ],
+  // 主人公（下向き2フレーム・上向き2フレーム・横向き2フレーム）
+  heroD1: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....15555551....",
+    "....15155151....",
+    "....15555551....",
+    ".....155551.....",
+    "....13333331....",
+    "...1333333331...",
+    "...1313333131...",
+    "....13333331....",
+    ".....133331.....",
+    ".....13.131.....",
+    ".....11..11.....",
+    "................",
+  ],
+  heroD2: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....15555551....",
+    "....15155151....",
+    "....15555551....",
+    ".....155551.....",
+    "....13333331....",
+    "...1333333331...",
+    "...1313333131...",
+    "....13333331....",
+    ".....133331.....",
+    ".....131.31.....",
+    ".....11..11.....",
+    "................",
+  ],
+  heroU1: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    ".....122221.....",
+    "....13333331....",
+    "...1333333331...",
+    "...1331331331...",
+    "....13333331....",
+    ".....133331.....",
+    ".....13.131.....",
+    ".....11..11.....",
+    "................",
+  ],
+  heroU2: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    "....12222221....",
+    ".....122221.....",
+    "....13333331....",
+    "...1333333331...",
+    "...1331331331...",
+    "....13333331....",
+    ".....133331.....",
+    ".....131.31.....",
+    ".....11..11.....",
+    "................",
+  ],
+  heroR1: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....15555511....",
+    "....15511511....",
+    "....15555511....",
+    ".....155551.....",
+    "....13333331....",
+    "....13333331....",
+    "....13313331....",
+    "....13333331....",
+    ".....133331.....",
+    ".....13..31.....",
+    ".....11..11.....",
+    "................",
+  ],
+  heroR2: [
+    "................",
+    ".....111111.....",
+    "....12222221....",
+    "....12222221....",
+    "....15555511....",
+    "....15511511....",
+    "....15555511....",
+    ".....155551.....",
+    "....13333331....",
+    "....13333331....",
+    "....13313331....",
+    "....13333331....",
+    ".....133331.....",
+    "....13...331....",
+    "....11...11.....",
+    "................",
+  ],
+};
+
+// パレット：[こい色, メイン, サブ, アクセント, 白]
+const PALETTES = {
+  slime:  [ ["#123a6e","#3b7bff","#7db0ff","#1a2a55","#fff"],   // 雪(青)
+            ["#5e1212","#e2403a","#ff8d77","#7a1f1f","#fff"],   // りんご(赤)
+            ["#3a3214","#8d7a35","#c9b46a","#4d421c","#fff"],   // なっとう(茶)
+            ["#6e3208","#f08c1e","#ffc163","#8a4a0a","#fff"],   // たこやき(橙)
+            ["#6e6230","#efe3ad","#fff7dd","#8c7c40","#5a4a20"] ], // うどん(クリーム)
+  ghost:  [ ["#1a2a55","#bcd5ff","#eef6ff","#3b7bff","#1a2a55"],
+            ["#3a1a55","#e0d0ff","#ffffff","#7b3bff","#2a1140"],
+            ["#1d3a14","#6fae4e","#b9e09a","#2f5a1f","#fff"],
+            ["#3a1430","#b05a9a","#e9a8d8","#5a1f4a","#fff"] ],
+  bat:    [ ["#2a1140","#7b3bff","#b9a0ff","#e8c020","#fff"],
+            ["#5e2a08","#e07a1e","#ffb163","#c03a1a","#fff"] ],
+  bird:   [ ["#444","#e8e8f2","#bcc3d8","#e8a020","#fff"],
+            ["#5a4a10","#e8c84a","#fff0a0","#c06a10","#fff"],
+            ["#10304a","#3a7ab0","#8ac0e8","#e04a3a","#fff"] ],
+  oni:    [ ["#401414","#d04a3a","#ff9a7a","#e8c020","#fff"],
+            ["#1d3a14","#5a9a3e","#a0d080","#e8c020","#fff"],
+            ["#40102a","#c03a6a","#ff8ab0","#e8c020","#fff"] ],
+  golem:  [ ["#2a3240","#7a8aa0","#c0d0e0","#3b7bff","#fff"],   // 富士(雪山)
+            ["#3a3424","#9a8e6a","#d0c4a0","#6a5a3a","#fff"],   // 大仏(銅)
+            ["#401008","#d04010","#ff8a30","#ffd700","#fff"] ], // マグマ
+  dragon: [ ["#10304a","#4ab0e0","#b0e8ff","#1a5a8a","#fff"],   // こおり
+            ["#1d3a24","#3aa05a","#90d8a8","#1a6a3a","#fff"],   // スカイツリー
+            ["#3a3a3a","#e8e8f0","#b8c0d0","#8a2a2a","#fff"],   // いずも(白)
+            ["#101a4a","#3a5ae0","#90a8ff","#1a2a8a","#fff"] ], // うずしお
+  hero:   [ ["#222","#3a6ad0","#d04a3a","#888","#f0c8a0"] ],    // 1=線 2=かぶと 3=服 4=- 5=はだ
+};
+
+// ================= フィールドマップ =================
+// ~海 .草原 t森 ^山 =道 h宿屋の町 s開始地点 0-7ボス城 A-Gゲート(A=北海道クリアで通れる)
+const MAP_SRC = [
+"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+"~~~~~~~~~~~~~~~~~~^^^~~~~~~~~~",
+"~~~~~~~~~~~~~~~tt.^^t.t~~~~~~~",
+"~~~~~~~~~~~~~~tt......tt~~~~~~",
+"~~~~~~~~~~~~~.t..0...^tt.~~~~~",
+"~~~~~~~~~~~~~....=..^^t..~~~~~",
+"~~~~~~~~~~~~~.t..=....t.~~~~~~",
+"~~~~~~~~~~~~~~.h.=.t...~~~~~~~",
+"~~~~~~~~~~~~~~..s=...~~~~~~~~~",
+"~~~~~~~~~~~~~~~..=..~~~~~~~~~~",
+"~~~~~~~~~~~~~~~~~A~~~~~~~~~~~~",
+"~~~~~~~~~~~~~~~~~=~~~~~~~~~~~~",
+"~~~~~~~~~~~~~~~tt=t~~~~~~~~~~~",
+"~~~~~~~~~~~~~tt..=.tt~~~~~~~~~",
+"~~~~~~~~~~~~~t...1..t.~~~~~~~~",
+"~~~~~~~~~~~~.^...=...t~~~~~~~~",
+"~~~~~~~~~~~~.^^..=.t..~~~~~~~~",
+"~~~~~~~~~~~~.^..h=....~~~~~~~~",
+"~~~~~~~~~~~~..t..=..t.~~~~~~~~",
+"~~~~~~~~~~~~~.t..=...~~~~~~~~~",
+"~~~~~~~~~~~~~^^^^B^^^^~~~~~~~~",
+"~~~~~~~~~~~~~....=.t.....~~~~~",
+"~~~~~~~~~~~~^^...=....t..~~~~~",
+"~~~~~~~~~~^^.C========2.h~~~~~",
+"~~~~~~~~~^t.=^^^^^.t.....~~~~~",
+"~~~~~~~~~.3.=..^^.t....~~~~~~~",
+"~~~~~~~~~.h.=..~~~~~~~~~~~~~~~",
+"~~~~~~~~~~..=..~~~~~~~~~~~~~~~",
+"~~~~~~~~~~^^D^^~~~~~~~~~~~~~~~",
+"~~~~~~~.....=....~~~~~~~~~~~~~",
+"~~~~~~.t.4..=..h.~~~~~~~~~~~~~",
+"~~~~~~..t...=.t..~~~~~~~~~~~~~",
+"~~~~~~...t.t=....~~~~~~~~~~~~~",
+"~~~~~~~~~~~~E~~~~~~~~~~~~~~~~~",
+"~~~~~~...t..=t...~~~~~~~~~~~~~",
+"~~~~~~.h...5=....~~~~~~~~~~~~~",
+"~~~~~~..t...=..t.~~~~~~~~~~~~~",
+"~~~~~~....t.=....~~~~~~~~~~~~~",
+"~~~~~~~~~~~~F~~~~~~~~~~~~~~~~~",
+"~~~~~~..t...=...~~~~~~~~~~~~~~",
+"~~~~~~.6....=.h.~~~~~~~~~~~~~~",
+"~~~~~~...t..=.t.~~~~~~~~~~~~~~",
+"~~~~~~....t.=...~~~~~~~~~~~~~~",
+"~~~~~~~~~~~~G~~~~~~~~~~~~~~~~~",
+"~~~~~~.t....=..t.~~~~~~~~~~~~~",
+"~~~~~.h..7..=....~~~~~~~~~~~~~",
+"~~~~~..t....=..t.~~~~~~~~~~~~~",
+"~~~~~....t..=.h..~~~~~~~~~~~~~",
+"~~~~~~..t...=t...~~~~~~~~~~~~~",
+"~~~~~~...t..=....~~~~~~~~~~~~~",
+"~~~~~~~~..t.=.~~~~~~~~~~~~~~~~",
+"~~~~~~~~....h~~~~~~~~~~~~~~~~~",
+"~~~~~~~~~.t..~~~~~~~~~~~~~~~~~",
+"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+];
+
+// 地方の領域（エンカウントする地方を決める）c0,c1,r0,r1。配列の先のものが優先
+const ZONES = [
+  { r:0, c0:11, c1:29, r0:0,  r1:11 },
+  { r:1, c0:11, c1:22, r0:12, r1:20 },
+  { r:2, c0:14, c1:26, r0:21, r1:23 },
+  { r:2, c0:18, c1:24, r0:24, r1:25 },
+  { r:3, c0:8,  c1:17, r0:21, r1:28 },
+  { r:4, c0:4,  c1:17, r0:29, r1:33 },
+  { r:5, c0:4,  c1:17, r0:34, r1:38 },
+  { r:6, c0:4,  c1:17, r0:39, r1:43 },
+  { r:7, c0:4,  c1:17, r0:44, r1:53 },
+];
+// ゲート：A-G = この文字を通るには cleared[req] が必要
+const GATE_REQ = { A:0, B:1, C:2, D:3, E:4, F:5, G:6 };
+const GATE_DEST = { A:"東北地方", B:"関東地方", C:"中部地方", D:"近畿地方", E:"中国地方", F:"四国地方", G:"九州・沖縄地方" };
+
+// ================= セーブ =================
+const SAVE_KEY = "todofukenQuestDX_v1";
+let save = null;
+function newSave() {
+  return {
+    name:"ゆうしゃ", pal:0, lv:1, exp:0, hp:26, mp:5, herbs:2,
+    x:16, y:8, dir:"D",
+    cleared:[false,false,false,false,false,false,false,false],
+    sound:true,
+  };
+}
+function maxHP() { return 22 + save.lv * 4; }
+function maxMP() { return 4 + save.lv; }
+function nextExp() { return save.lv * 40; }
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) { save = Object.assign(newSave(), JSON.parse(raw)); return true; }
+  } catch(e){}
+  return false;
+}
+function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch(e){} }
+
+// ================= ユーティリティ =================
+const $ = id => document.getElementById(id);
+function shuffle(a) { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function pick(arr,n,ex){ return shuffle(arr.filter(x=>!ex||!ex(x))).slice(0,n); }
+function rnd(n){ return Math.floor(Math.random()*n); }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ================= サウンド（8bit風） =================
+let actx = null;
+function audio() { if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
+function tone(freq, t0, dur, type, vol) {
+  const a = audio();
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type||"square"; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol||0.045, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0+dur);
+}
+function sfx(freqs, dur, type) {
+  if (!save || !save.sound) return;
+  try { let t = audio().currentTime;
+    freqs.forEach(f=>{ tone(f,t,dur,type,0.06); t+=dur*0.7; });
+  } catch(e){}
+}
+const N = { C4:262,D4:294,E4:330,F4:349,G4:392,A4:440,B4:494,C5:523,D5:587,E5:659,F5:698,G5:784,A5:880,B5:988,C6:1047,D6:1175,E6:1319,G3:196,A3:220,F3:175,C3:131,E3:165,D3:147,GS4:415,AS4:466 };
+// BGM（オリジナルの8bit風メロディ）
+const BGM = {
+  field: { bpm:132, mel:[
+    N.C5,N.E5,N.G5,N.E5, N.F5,N.A5,N.C6,N.A5, N.G5,N.B5,N.D6,N.B5, N.C6,N.G5,N.E5,N.C5,
+    N.A4,N.C5,N.E5,N.C5, N.F4,N.A4,N.C5,N.A4, N.G4,N.B4,N.D5,N.B4, N.C5,0,N.G4,0 ],
+    bass:[ N.C3,N.C3,N.F3,N.F3, N.G3,N.G3,N.C3,N.C3, N.A3,N.A3,N.F3,N.F3, N.G3,N.G3,N.C3,N.C3 ] },
+  battle: { bpm:168, mel:[
+    N.A4,N.C5,N.E5,N.C5, N.A4,N.C5,N.E5,N.C5, N.F4,N.A4,N.D5,N.A4, N.E4,N.GS4,N.B4,N.GS4,
+    N.A4,N.E5,N.A5,N.E5, N.F4,N.D5,N.A5,N.D5, N.E4,N.B4,N.E5,N.B4, N.A4,0,N.E4,0 ],
+    bass:[ N.A3,N.A3,N.A3,N.A3, N.F3,N.F3,N.F3,N.F3, N.D3,N.D3,N.E3,N.E3, N.A3,N.A3,N.E3,N.E3 ] },
+};
+let bgmTimer = null, bgmStep = 0, bgmCur = null;
+function playBGM(name) {
+  stopBGM();
+  if (!save || !save.sound || !name) return;
+  bgmCur = name; bgmStep = 0;
+  const seq = BGM[name];
+  const stepDur = 60 / seq.bpm / 2; // 8分音符
+  try {
+    audio();
+    bgmTimer = setInterval(()=>{
+      const t = actx.currentTime + 0.02;
+      const m = seq.mel[bgmStep % seq.mel.length];
+      if (m) tone(m, t, stepDur*0.9, "square", 0.035);
+      if (bgmStep % 2 === 0) {
+        const b = seq.bass[Math.floor(bgmStep/2) % seq.bass.length];
+        if (b) tone(b, t, stepDur*1.6, "triangle", 0.05);
+      }
+      bgmStep++;
+    }, stepDur*1000);
+  } catch(e){}
+}
+function stopBGM(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } bgmCur=null; }
+const sndOK   = ()=>sfx([N.A5],0.07);
+const sndMove = ()=>sfx([N.E5],0.05);
+const sndGood = ()=>sfx([N.E5,N.A5,N.E6],0.1);
+const sndBad  = ()=>sfx([N.E4,N.C4],0.16,"sawtooth");
+const sndLvUp = ()=>sfx([N.C5,N.E5,N.G5,N.C6,N.E6],0.11);
+const sndWinF = ()=>sfx([N.G5,N.C6,N.E6,N.G5,N.C6,N.E6,N.G6||1568,N.E6],0.09);
+
+// ================= スプライト描画 =================
+const spriteCache = {};
+function buildSprite(name, pal, scale) {
+  const key = name+"_"+pal+"_"+scale;
+  if (spriteCache[key]) return spriteCache[key];
+  const art = SPRITE_ART[name];
+  const colors = PALETTES[name.startsWith("hero")?"hero":name][pal] || PALETTES[name.startsWith("hero")?"hero":name][0];
+  const cv = document.createElement("canvas");
+  cv.width = 16*scale; cv.height = 16*scale;
+  const c = cv.getContext("2d");
+  for (let y=0; y<16; y++) for (let x=0; x<16; x++) {
+    const ch = art[y][x];
+    if (ch === "." || ch === undefined) continue;
+    c.fillStyle = colors[parseInt(ch,10)-1] || "#000";
+    c.fillRect(x*scale, y*scale, scale, scale);
+  }
+  spriteCache[key] = cv;
+  return cv;
+}
+
+// ================= タイル描画 =================
+const TILE = 32; // 表示サイズ
+const tileCache = {};
+function tileCanvas(ch) {
+  if (tileCache[ch]) return tileCache[ch];
+  const cv = document.createElement("canvas");
+  cv.width = TILE; cv.height = TILE;
+  const c = cv.getContext("2d");
+  const px = (x,y,w,h,col)=>{ c.fillStyle=col; c.fillRect(x*2,y*2,w*2,h*2); };
+  const base = (col)=>{ c.fillStyle=col; c.fillRect(0,0,TILE,TILE); };
+  if (ch==="~") {
+    base("#1a4ab0");
+    px(2,4,4,1,"#4a7ae0"); px(9,10,4,1,"#4a7ae0"); px(4,13,3,1,"#3a6ad0");
+  } else if (ch==="."||ch==="s") {
+    base("#3aa044");
+    px(3,3,1,1,"#2a8034"); px(11,5,1,1,"#2a8034"); px(6,10,1,1,"#2a8034"); px(13,13,1,1,"#2a8034");
+  } else if (ch==="t") {
+    base("#3aa044");
+    px(4,2,8,2,"#1d6a2a"); px(2,4,12,5,"#1d6a2a"); px(5,4,2,2,"#2f8a3a");
+    px(7,9,2,4,"#6a4a2a");
+  } else if (ch==="^") {
+    base("#3aa044");
+    px(2,12,12,2,"#7a6a5a");
+    px(3,9,10,3,"#8a7a66"); px(5,6,6,3,"#9a8a76"); px(7,3,2,3,"#b0a090");
+    px(7,3,2,1,"#fff"); px(6,4,1,1,"#fff");
+  } else if (ch==="=") {
+    base("#caa46a");
+    px(2,3,1,1,"#a8854e"); px(10,6,1,1,"#a8854e"); px(5,11,1,1,"#a8854e"); px(13,13,1,1,"#a8854e");
+  } else if (ch==="h") {
+    base("#3aa044");
+    px(3,7,10,7,"#c08a5a"); px(2,4,12,3,"#a03a2a"); px(4,2,8,2,"#a03a2a");
+    px(6,9,3,5,"#5a3a1a"); px(10,9,2,2,"#ffe080");
+  } else if (/[0-7]/.test(ch)) {
+    base("#3aa044");
+    px(2,5,12,9,"#8a8a9a"); px(2,3,2,2,"#8a8a9a"); px(7,3,2,2,"#8a8a9a"); px(12,3,2,2,"#8a8a9a");
+    px(6,8,4,6,"#3a3a4a"); px(3,7,2,2,"#3a3a4a"); px(11,7,2,2,"#3a3a4a");
+    px(7,1,2,2,"#d04a3a");
+  } else if (/[A-G]/.test(ch)) {
+    base("#caa46a");
+    px(2,2,2,12,"#b03a2a"); px(12,2,2,12,"#b03a2a"); px(1,2,14,2,"#b03a2a"); px(2,5,12,1,"#b03a2a");
+  } else {
+    base("#3aa044");
+  }
+  tileCache[ch] = cv;
+  return cv;
+}
+
+// ================= マップ・状態 =================
+const MAP = MAP_SRC.map(row=>row.split(""));
+const MAP_H = MAP.length, MAP_W = MAP[0].length;
+function tileAt(x,y){ if(x<0||y<0||x>=MAP_W||y>=MAP_H) return "~"; return MAP[y][x]; }
+function walkable(ch){ return ch!=="~" && ch!=="^"; }
+function zoneOf(x,y){ for(const z of ZONES){ if(x>=z.c0&&x<=z.c1&&y>=z.r0&&y<=z.r1) return z.r; } return 0; }
+
+let mode = "title"; // title / name / field / msg / battle / ending
+const ctx = $("field-canvas").getContext("2d");
+ctx.imageSmoothingEnabled = false;
+const VIEW_W = 15, VIEW_H = 13;
+
+// 主人公の見た目（パレット違い）
+const HERO_PALS = [
+  ["#222","#3a6ad0","#d04a3a","#888","#f0c8a0"],
+  ["#222","#d04a3a","#3a6ad0","#888","#f0c8a0"],
+  ["#222","#2a8a3a","#caa42a","#888","#f0c8a0"],
+  ["#222","#7b3bff","#e8a0c8","#888","#f0c8a0"],
+];
+function heroSprite(dir, frame, scale) {
+  const name = "hero"+(dir==="L"?"R":dir)+(frame+1);
+  const key = "H"+save.pal+"_"+name+"_"+scale+(dir==="L"?"_f":"");
+  if (spriteCache[key]) return spriteCache[key];
+  PALETTES.hero[0] = HERO_PALS[save.pal];
+  delete spriteCache[name+"_0_"+scale];
+  const sp = buildSprite(name, 0, scale);
+  let out = sp;
+  if (dir==="L") {
+    const cv = document.createElement("canvas");
+    cv.width=sp.width; cv.height=sp.height;
+    const c=cv.getContext("2d");
+    c.translate(sp.width,0); c.scale(-1,1); c.drawImage(sp,0,0);
+    out = cv;
+  } else {
+    const cv = document.createElement("canvas");
+    cv.width=sp.width; cv.height=sp.height;
+    cv.getContext("2d").drawImage(sp,0,0);
+    out = cv;
+  }
+  spriteCache[key] = out;
+  return out;
+}
+
+// ================= フィールド描画 =================
+let walking = false, walkFrame = 0, animT = 0;
+function drawField() {
+  if (!save) return;
+  const camX = Math.max(0, Math.min(MAP_W-VIEW_W, save.x - Math.floor(VIEW_W/2)));
+  const camY = Math.max(0, Math.min(MAP_H-VIEW_H, save.y - Math.floor(VIEW_H/2)));
+  for (let vy=0; vy<VIEW_H; vy++) for (let vx=0; vx<VIEW_W; vx++) {
+    const ch = tileAt(camX+vx, camY+vy);
+    let draw = ch;
+    if (ch==="s") draw=".";
+    if (/[A-G]/.test(ch) && save.cleared[GATE_REQ[ch]]) draw="=";
+    if (/[0-7]/.test(ch) && save.cleared[+ch]) { /* 城はそのまま表示 */ }
+    ctx.drawImage(tileCanvas(draw), vx*TILE, vy*TILE);
+    if (/[0-7]/.test(ch) && save.cleared[+ch]) {
+      ctx.fillStyle="#ffd700"; ctx.font="14px sans-serif";
+      ctx.fillText("★", vx*TILE+10, vy*TILE+14);
+    }
+  }
+  // 主人公
+  const hx = (save.x-camX)*TILE, hy = (save.y-camY)*TILE;
+  ctx.drawImage(heroSprite(save.dir, walkFrame, 2), hx, hy);
+  // 地方名
+  const rg = zoneOf(save.x, save.y);
+  ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(0,0,150,24);
+  ctx.fillStyle="#fff"; ctx.font="13px monospace";
+  ctx.fillText("📍" + REGIONS[rg].name, 8, 17);
+  ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillRect(480-130,0,130,24);
+  ctx.fillText("HP "+save.hp+"/"+maxHP()+" Lv"+save.lv, 480-122, 17);
+}
+function fieldLoop(ts) {
+  if (mode==="field" || mode==="msg" || mode==="choice") {
+    animT = ts;
+    drawField();
+  }
+  requestAnimationFrame(fieldLoop);
+}
+
+// ================= 移動 =================
+const DIRS = { U:[0,-1], D:[0,1], L:[-1,0], R:[1,0] };
+let heldDir = null;
+async function tryMove(dir) {
+  if (mode!=="field" || walking) return;
+  save.dir = dir;
+  const [dx,dy] = DIRS[dir];
+  const nx = save.x+dx, ny = save.y+dy;
+  const ch = tileAt(nx,ny);
+  if (!walkable(ch)) { drawField(); return; }
+  // ゲート判定
+  if (/[A-G]/.test(ch) && !save.cleared[GATE_REQ[ch]]) {
+    await showMsg("へいし「とまれ！ ここから さきは "+GATE_DEST[ch]+"。\n" +
+      REGIONS[GATE_REQ[ch]].name+"のボス『"+MONSTERS[GATE_REQ[ch]][2].name+"』を\nたおしてから くるのだ！」");
+    return;
+  }
+  walking = true;
+  walkFrame = 1-walkFrame;
+  save.x = nx; save.y = ny;
+  drawField();
+  await wait(110);
+  walking = false;
+  // タイルイベント
+  if (ch==="h") { await innEvent(); return; }
+  if (/[0-7]/.test(ch)) { await castleEvent(+ch); return; }
+  // エンカウント
+  if ((ch==="."||ch==="t"||ch==="s") && Math.random() < (ch==="t"?0.16:0.11)) {
+    startBattle(zoneOf(nx,ny), false);
+  }
+  if (heldDir) tryMove(heldDir);
+}
+
+async function innEvent() {
+  sndGood();
+  save.hp = maxHP(); save.mp = maxMP();
+  if (save.herbs < 2) save.herbs = 2;
+  writeSave();
+  await showMsg("やどや「ようこそ！ ゆっくり やすんでいってね」\nＨＰとＭＰが かいふくした！\nぼうけんのきろくを つけた！");
+}
+
+async function castleEvent(r) {
+  if (save.cleared[r]) {
+    await showMsg("ここは "+REGIONS[r].name+"のしろ。\nたから「"+REGIONS[r].treasureName+"」は とりもどした！\nへいわが もどっている。");
+    return;
+  }
+  const boss = MONSTERS[r][2];
+  await showMsg("しろの おくから ぶきみな こえが きこえる…\n「よくきたな ちっぽけな ゆうしゃよ…」");
+  startBattle(r, true);
+}
+
+// ================= メッセージ＆選択 =================
+let msgResolve = null, typing = false, typeSkip = false;
+function showMsg(text) {
+  return new Promise(async resolve => {
+    const prevMode = mode;
+    mode = "msg";
+    msgResolve = ()=>{ mode = prevMode==="battle"?"battle":"field"; resolve(); };
+    $("msg-win").style.display = "block";
+    await typeText($("msg-text"), text);
+    $("msg-win").querySelector(".next-arrow").style.display = "block";
+  });
+}
+async function typeText(el, text) {
+  typing = true; typeSkip = false;
+  el.textContent = "";
+  $("msg-win").querySelector(".next-arrow").style.display = "none";
+  for (let i=0; i<text.length; i++) {
+    if (typeSkip) { el.textContent = text; break; }
+    el.textContent += text[i];
+    if (i%3===0) sndMove();
+    await wait(26);
+  }
+  typing = false;
+}
+function msgAdvance() {
+  if (typing) { typeSkip = true; return; }
+  if (msgResolve) {
+    $("msg-win").style.display = "none";
+    const r = msgResolve; msgResolve = null; r();
+  }
+}
+
+// 選択ウィンドウ（コマンド/クイズ共通カーソル処理）
+let choiceItems = [], choiceSel = 0, choiceResolve = null, choiceBox = null;
+function showChoice(caption, items, opts) {
+  // items: [{label, sub, value}]
+  return new Promise(resolve => {
+    mode = "choice";
+    choiceResolve = resolve;
+    choiceItems = items; choiceSel = 0;
+    choiceBox = (opts&&opts.box)||"choice";
+    if (choiceBox==="choice") {
+      $("choice-caption").textContent = caption||"";
+      const wrap = $("choice-items"); wrap.innerHTML = "";
+      items.forEach((it,i)=>{
+        const d = document.createElement("div");
+        d.className = "choice-item"+(i===0?" sel":"");
+        d.innerHTML = esc(it.label) + (it.sub?` <small>${esc(it.sub)}</small>`:"");
+        d.addEventListener("click", ()=>{ choiceSel=i; updateChoiceSel(); choiceConfirm(); });
+        wrap.appendChild(d);
+      });
+      $("choice-win").style.display = "block";
+    }
+  });
+}
+function updateChoiceSel() {
+  const cls = choiceBox==="choice" ? ".choice-item" : ".quiz-opt";
+  document.querySelectorAll(cls).forEach((d,i)=>d.classList.toggle("sel", i===choiceSel));
+}
+function choiceMove(d) {
+  if (mode!=="choice"&&mode!=="quiz") return;
+  choiceSel = (choiceSel + d + choiceItems.length) % choiceItems.length;
+  sndMove(); updateChoiceSel();
+}
+function choiceConfirm() {
+  if (!choiceResolve) return;
+  sndOK();
+  $("choice-win").style.display = "none";
+  const r = choiceResolve; choiceResolve = null;
+  r(choiceItems[choiceSel].value !== undefined ? choiceItems[choiceSel].value : choiceSel);
+}
+
+// ================= クイズ生成 =================
+function prefOpt(p){ return { main:p.n, sub:p.k }; }
+function nearbyPrefs(p) {
+  const pool = [];
+  for (let d=0; d<REGIONS.length; d++) {
+    [p.r+d, p.r-d].forEach(r=>{
+      if (r<0 || r>=REGIONS.length) return;
+      PREFS.filter(x=>x.r===r&&x.n!==p.n).forEach(x=>{
+        if (!pool.some(y=>y.n===x.n)) pool.push(x);
+      });
+    });
+    if (pool.length>=3) break;
+  }
+  return pool.length>=3 ? pool : PREFS.filter(x=>x.n!==p.n);
+}
+function battleTargets(region) {
+  const targets = PREFS.filter(p=>p.r===region);
+  const need = 4;
+  const addRegion = r=>{
+    if (r<0 || r>=REGIONS.length) return;
+    PREFS.filter(p=>p.r===r).forEach(p=>{
+      if (targets.length<need && !targets.some(x=>x.n===p.n)) targets.push(p);
+    });
+  };
+  for (let d=1; targets.length<need && d<REGIONS.length; d++) {
+    addRegion(region+d);
+    addRegion(region-d);
+  }
+  return targets;
+}
+function makeQuestion(type, p) {
+  if (type==="yomi") {
+    const wrong = pick(PREFS,3,x=>x.k===p.k).map(x=>({main:x.k}));
+    return { type:"よみかたクイズ", text:`「${p.n}」は なんと よむ？`, answer:{main:p.k},
+      options:shuffle(wrong.concat([{main:p.k}])), explain:`${p.n}は「${p.k}」とよむよ！` };
+  }
+  if (type==="capital") {
+    const wrong = pick(PREFS,3,x=>x.c===p.c).map(x=>({main:x.c,sub:x.ck}));
+    return { type:"県庁所在地クイズ", text:`${p.n}（${p.k}）の 県庁所在地は どこ？`, answer:{main:p.c,sub:p.ck},
+      options:shuffle(wrong.concat([{main:p.c,sub:p.ck}])), explain:`${p.n}の県庁所在地は「${p.c}（${p.ck}）」！` };
+  }
+  if (type==="famous") {
+    const item = p.f[rnd(p.f.length)];
+    const wrong = pick(nearbyPrefs(p),3).map(prefOpt);
+    return { type:"めいぶつクイズ", text:`「${item}」で ゆうめいなのは どこ？`, answer:prefOpt(p),
+      options:shuffle(wrong.concat([prefOpt(p)])), explain:`「${item}」は ${p.n}（${p.k}）！` };
+  }
+  if (type==="hint") {
+    const wrong = pick(nearbyPrefs(p),3).map(prefOpt);
+    return { type:"ヒントクイズ", text:`ヒント「${p.h}」\nこれは どこ？`, answer:prefOpt(p),
+      options:shuffle(wrong.concat([prefOpt(p)])), explain:`せいかいは ${p.n}（${p.k}）！` };
+  }
+  const wrongR = pick(REGIONS,3,x=>x.name===REGIONS[p.r].name).map(x=>({main:x.name}));
+  return { type:"なに地方？クイズ", text:`${p.n}（${p.k}）は なに地方？`, answer:{main:REGIONS[p.r].name},
+    options:shuffle(wrongR.concat([{main:REGIONS[p.r].name}])), explain:`${p.n}は ${REGIONS[p.r].name}！` };
+}
+function buildPool(region, boss) {
+  const prefs = battleTargets(region);
+  const pool = [];
+  prefs.forEach(p=>{
+    pool.push(makeQuestion("yomi",p), makeQuestion("capital",p), makeQuestion("famous",p), makeQuestion("hint",p));
+  });
+  if (boss) {
+    prefs.forEach(p=>pool.push(makeQuestion("region",p)));
+    const review = PREFS.filter(p=>p.r<region&&save.cleared[p.r]);
+    pick(review,5).forEach(p=>pool.push(makeQuestion("region",p)));
+  }
+  return shuffle(pool);
+}
+
+// クイズ表示（バトル中）
+function askQuiz(q) {
+  return new Promise(resolve => {
+    mode = "quiz";
+    $("quiz-type").textContent = "▼ " + q.type;
+    $("quiz-text").textContent = q.text;
+    const wrap = $("quiz-opts"); wrap.innerHTML = "";
+    choiceItems = q.options.map((o,i)=>({label:o.main, value:i}));
+    choiceSel = 0; choiceBox = "quiz";
+    q.options.forEach((o,i)=>{
+      const d = document.createElement("div");
+      d.className = "quiz-opt"+(i===0?" sel":"");
+      d.dataset.main = o.main;
+      d.innerHTML = esc(o.main)+(o.sub?`<small>${esc(o.sub)}</small>`:"");
+      d.addEventListener("click", ()=>{ choiceSel=i; updateChoiceSel(); choiceConfirm(); });
+      wrap.appendChild(d);
+    });
+    $("quiz-win").style.display = "block";
+    choiceResolve = (idx)=>{
+      const correct = q.options[idx].main === q.answer.main;
+      document.querySelectorAll(".quiz-opt").forEach(d=>{
+        if (d.dataset.main===q.answer.main) d.classList.add("ok");
+      });
+      if (!correct) document.querySelectorAll(".quiz-opt")[idx].classList.add("ng");
+      setTimeout(()=>{ $("quiz-win").style.display = "none"; resolve(correct); }, correct?500:1000);
+    };
+  });
+}
+
+// ================= バトル =================
+const battle = { region:0, monster:null, mhp:0, mmax:0, boss:false, combo:0, pool:[] };
+
+async function startBattle(region, isBoss) {
+  mode = "battle";
+  heldDir = null;
+  stopBGM(); playBGM("battle");
+  battle.region = region;
+  battle.boss = isBoss;
+  const list = MONSTERS[region];
+  battle.monster = isBoss ? list[2] : list[rnd(2)];
+  battle.mmax = battle.monster.hp;
+  battle.mhp = battle.monster.hp;
+  battle.combo = 0;
+  battle.pool = buildPool(region, isBoss);
+  // 描画
+  $("battle-layer").style.display = "block";
+  $("dpad").style.display = "none";
+  $("battle-scene").className = isBoss ? "boss-bg" : "";
+  const sp = buildSprite(battle.monster.sprite, battle.monster.pal, 10);
+  const mc = $("monster-canvas");
+  mc.className = "";
+  mc.width = sp.width; mc.height = sp.height;
+  mc.getContext("2d").drawImage(sp,0,0);
+  $("monster-hud-name").textContent = (isBoss?"👑":"") + battle.monster.name;
+  updateBattleHUD();
+  await showMsg((isBoss?"ボスの ":"")+battle.monster.name+"が あらわれた！");
+  battleTurn();
+}
+function updateBattleHUD() {
+  $("battle-hud").innerHTML =
+    `<span class="dq-title">${esc(save.name)}</span><br>ＨＰ ${save.hp}／${maxHP()}<br>ＭＰ ${save.mp}／${maxMP()}<br>Ｌｖ ${save.lv}　やくそう×${save.herbs}`;
+  $("monster-hpbar").firstElementChild.style.width = Math.max(0, battle.mhp/battle.mmax*100)+"%";
+}
+
+async function battleTurn() {
+  if (mode!=="battle" && mode!=="choice" && mode!=="quiz" && mode!=="msg") return;
+  mode = "battle";
+  const cmd = await showChoice("コマンド？", [
+    { label:"たたかう", sub:"クイズで こうげき！", value:"fight" },
+    { label:"じゅもん", sub:"ヒール（MP3で かいふく）", value:"spell" },
+    { label:"どうぐ",   sub:"やくそう×"+save.herbs, value:"item" },
+    { label:"にげる",   sub:"", value:"run" },
+  ]);
+  if (cmd==="fight") return doFight();
+  if (cmd==="spell") return doSpell();
+  if (cmd==="item")  return doItem();
+  return doRun();
+}
+
+async function doFight() {
+  if (battle.pool.length===0) battle.pool = buildPool(battle.region, battle.boss);
+  const q = battle.pool.pop();
+  const correct = await askQuiz(q);
+  mode = "battle";
+  if (correct) {
+    sndGood();
+    battle.combo++;
+    let dmg = 6 + rnd(5) + save.lv*2;
+    let crit = false;
+    if (battle.combo>=3) { dmg*=2; crit=true; battle.combo=0; }
+    battle.mhp -= dmg;
+    save.mp = Math.min(maxMP(), save.mp+1);
+    // ヒット演出
+    $("battle-flash").classList.remove("go"); void $("battle-flash").offsetWidth; $("battle-flash").classList.add("go");
+    const mc=$("monster-canvas"); mc.classList.remove("hit"); void mc.offsetWidth; mc.classList.add("hit");
+    popDamage(dmg, crit);
+    updateBattleHUD();
+    await showMsg("せいかい！ "+save.name+"の こうげき！\n"+(crit?"かいしんの いちげき！！ ":"")+battle.monster.name+"に "+dmg+"の ダメージ！");
+    if (battle.mhp<=0) return battleWin();
+  } else {
+    sndBad();
+    battle.combo = 0;
+    await showMsg("ミス！ "+q.explain);
+    return monsterAttack();
+  }
+  battleTurn();
+}
+function popDamage(dmg, crit) {
+  const d = document.createElement("div");
+  d.className = "dmg-pop";
+  d.textContent = (crit?"💥":"") + dmg;
+  d.style.left = "50%"; d.style.top = "30%";
+  d.style.color = crit ? "#ffd700" : "#fff";
+  $("battle-layer").appendChild(d);
+  setTimeout(()=>d.remove(), 850);
+}
+
+async function monsterAttack() {
+  const dmg = battle.monster.atk + rnd(4);
+  save.hp = Math.max(0, save.hp - dmg);
+  $("battle-layer").classList.remove("hero-hit"); void $("battle-layer").offsetWidth;
+  $("battle-layer").classList.add("hero-hit");
+  sndBad();
+  updateBattleHUD();
+  await showMsg(battle.monster.name+"の こうげき！\n"+save.name+"は "+dmg+"の ダメージを うけた！");
+  if (save.hp<=0) return battleLose();
+  battleTurn();
+}
+
+async function doSpell() {
+  if (save.mp < 3) {
+    await showMsg("ＭＰが たりない！（クイズに せいかいすると ＭＰが たまるよ）");
+    return battleTurn();
+  }
+  save.mp -= 3;
+  const heal = 12 + rnd(7);
+  save.hp = Math.min(maxHP(), save.hp+heal);
+  sndLvUp();
+  updateBattleHUD();
+  await showMsg(save.name+"は ヒールを となえた！\nＨＰが "+heal+" かいふくした！");
+  battleTurn();
+}
+async function doItem() {
+  if (save.herbs<=0) {
+    await showMsg("やくそうを もっていない！（やどやで もらえるよ）");
+    return battleTurn();
+  }
+  save.herbs--;
+  const heal = 20;
+  save.hp = Math.min(maxHP(), save.hp+heal);
+  sndGood();
+  updateBattleHUD();
+  await showMsg(save.name+"は やくそうを つかった！\nＨＰが "+heal+" かいふくした！");
+  battleTurn();
+}
+async function doRun() {
+  if (battle.boss) {
+    await showMsg("ボスから にげることは できない！");
+    return battleTurn();
+  }
+  if (Math.random()<0.8) {
+    await showMsg(save.name+"は にげだした！");
+    endBattle();
+  } else {
+    await showMsg("しかし まわりこまれてしまった！");
+    monsterAttack();
+  }
+}
+
+async function battleWin() {
+  stopBGM(); sndWinF();
+  $("monster-canvas").classList.add("dead");
+  const exp = battle.boss ? 60+battle.region*12 : 16+battle.region*5;
+  await showMsg(battle.monster.name+"を たおした！\n"+exp+"の けいけんちを かくとく！");
+  save.exp += exp;
+  if (Math.random()<0.4 && save.herbs<6 && !battle.boss) {
+    save.herbs++;
+    await showMsg(battle.monster.name+"は やくそうを おとしていった！");
+  }
+  // レベルアップ
+  while (save.exp >= nextExp()) {
+    save.exp -= nextExp();
+    save.lv++;
+    save.hp = maxHP(); save.mp = maxMP();
+    sndLvUp();
+    await showMsg("♪ レベルが あがった！ "+save.name+"は Ｌｖ"+save.lv+"に なった！\nＨＰとＭＰが ぜんかいふくした！");
+  }
+  if (battle.boss) {
+    save.cleared[battle.region] = true;
+    writeSave();
+    await showMsg(REGIONS[battle.region].name+"に へいわが もどった！\nたから「"+REGIONS[battle.region].treasureName+"」を とりもどした！ "+REGIONS[battle.region].treasure);
+    const prefs = PREFS.filter(p=>p.r===battle.region);
+    await showMsg("【"+REGIONS[battle.region].name+"】\n"+prefs.map(p=>p.n+"（"+p.k+"）").join("、")+"\nこの地方の都道府県、おぼえたかな？");
+    if (save.cleared.every(c=>c)) { endBattle(true); return showEnding(); }
+  }
+  writeSave();
+  endBattle();
+}
+async function battleLose() {
+  stopBGM();
+  sfx([N.A4,N.GS4,N.G4,N.F4,N.E4],0.22,"sawtooth");
+  await showMsg(save.name+"は たおれてしまった…\nめのまえが まっくらに なった…");
+  await showMsg("……だが ゆうしゃは あきらめない！\nやどやで めを さました。（ＨＰぜんかいふく）");
+  save.hp = maxHP(); save.mp = maxMP();
+  writeSave();
+  endBattle();
+}
+function endBattle(silent) {
+  $("battle-layer").style.display = "none";
+  $("dpad").style.display = "";
+  mode = "field";
+  if (!silent) playBGM("field");
+  drawField();
+}
+
+// ================= メニュー =================
+async function openMenu() {
+  if (mode!=="field") return;
+  const sel = await showChoice("メニュー", [
+    { label:"つよさ", value:"status" },
+    { label:"都道府県ずかん", value:"zukan" },
+    { label:"おと："+(save.sound?"ON":"OFF"), value:"sound" },
+    { label:"とじる", value:"close" },
+  ]);
+  mode = "field";
+  if (sel==="status") {
+    await showMsg("【"+save.name+"のつよさ】\nＬｖ"+save.lv+"　ＨＰ "+save.hp+"／"+maxHP()+"　ＭＰ "+save.mp+"／"+maxMP()+
+      "\nけいけんち："+save.exp+"（つぎのレベルまで あと"+(nextExp()-save.exp)+"）\nやくそう×"+save.herbs+
+      "\nあつめた たから："+REGIONS.map((r,i)=>save.cleared[i]?r.treasure:"▫").join(""));
+  } else if (sel==="zukan") {
+    await zukanMenu();
+  } else if (sel==="sound") {
+    save.sound = !save.sound;
+    writeSave();
+    if (save.sound) playBGM("field"); else stopBGM();
+  }
+}
+async function zukanMenu() {
+  const sel = await showChoice("どの地方をみる？",
+    REGIONS.map((r,i)=>({label:(save.cleared[i]?"★":"　")+r.name, value:i})).concat([{label:"とじる", value:-1}]));
+  mode = "field";
+  if (sel===-1) return;
+  const prefs = PREFS.filter(p=>p.r===sel);
+  for (const p of prefs) {
+    await showMsg("【"+p.n+"（"+p.k+"）】"+REGIONS[sel].name+"\n県庁所在地："+p.c+"（"+p.ck+"）\n★"+p.f.join("\n★"));
+  }
+  zukanMenu();
+}
+
+// ================= エンディング =================
+function showEnding() {
+  mode = "ending";
+  stopBGM(); sndWinF();
+  $("ending-layer").style.display = "block";
+  $("cert-name").textContent = save.name + " さん";
+  $("cert-treasures").textContent = REGIONS.map(r=>r.treasure).join(" ");
+  $("cert-level").textContent = "Ｌｖ"+save.lv+"の だいゆうしゃ！";
+  const d = new Date();
+  $("cert-date").textContent = d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日";
+  for (let i=0;i<30;i++) {
+    const c = document.createElement("div");
+    c.className="confetti";
+    c.textContent=["🎉","✨","🎊","⭐"][i%4];
+    c.style.left=Math.random()*100+"vw";
+    c.style.animationDuration=2.5+Math.random()*3+"s";
+    c.style.animationDelay=Math.random()*2+"s";
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),8000);
+  }
+}
+$("btn-ending").addEventListener("click", ()=>{
+  $("ending-layer").style.display="none";
+  mode="field"; playBGM("field");
+});
+
+// ================= タイトル＆なまえ =================
+let titleSel = 0;
+function titleItems(){ return Array.from(document.querySelectorAll(".title-menu-item")).filter(d=>d.style.display!=="none"); }
+function updateTitleSel() { titleItems().forEach((d,i)=>d.classList.toggle("sel", i===titleSel)); }
+function titleAction(act) {
+  if (act==="new") {
+    save = newSave();
+    openNameScreen();
+  } else if (act==="cont") {
+    loadSave();
+    startField();
+  } else if (act==="sound") {
+    save = save || newSave();
+    save.sound = !save.sound;
+    document.querySelector('[data-act="sound"]').textContent = "おと："+(save.sound?"ON":"OFF");
+    sndOK();
+  }
+}
+document.querySelectorAll(".title-menu-item").forEach(d=>{
+  d.addEventListener("click", ()=>titleAction(d.dataset.act));
+});
+function openNameScreen() {
+  $("title-layer").style.display = "none";
+  $("name-layer").style.display = "block";
+  mode = "name";
+  const row = $("avatar-row"); row.innerHTML = "";
+  HERO_PALS.forEach((pal,i)=>{
+    const d = document.createElement("div");
+    d.className = "avatar-pick"+(i===save.pal?" sel":"");
+    PALETTES.hero[0] = pal;
+    Object.keys(spriteCache).forEach(k=>{ if(k.startsWith("heroD1")) delete spriteCache[k]; });
+    const cv = buildSprite("heroD1",0,3);
+    const copy = document.createElement("canvas");
+    copy.width=cv.width; copy.height=cv.height;
+    copy.getContext("2d").drawImage(cv,0,0);
+    d.appendChild(copy);
+    d.addEventListener("click", ()=>{
+      save.pal = i; sndOK();
+      row.querySelectorAll(".avatar-pick").forEach(x=>x.classList.remove("sel"));
+      d.classList.add("sel");
+    });
+    row.appendChild(d);
+  });
+  Object.keys(spriteCache).forEach(k=>{ if(k.startsWith("hero")||k.startsWith("H")) delete spriteCache[k]; });
+  $("input-name").focus();
+}
+$("btn-name-ok").addEventListener("click", async ()=>{
+  save.name = $("input-name").value.trim() || "ゆうしゃ";
+  Object.keys(spriteCache).forEach(k=>{ if(k.startsWith("hero")||k.startsWith("H")) delete spriteCache[k]; });
+  $("name-layer").style.display = "none";
+  writeSave();
+  startField();
+  await showMsg("おうさま「ゆうしゃ "+save.name+"よ！\n８つの地方の たからが まものに うばわれてしまった。\n日本を めぐり たからを とりもどしてくれ！」");
+  await showMsg("おうさま「みちは 北海道から 南へ つづいておる。\nまずは 北のしろに いる ボスを たおすのだ。\nこまったら 『メニュー』の ずかんを みるのじゃぞ！」");
+});
+function startField() {
+  $("title-layer").style.display = "none";
+  mode = "field";
+  playBGM("field");
+  drawField();
+}
+
+// ================= 入力 =================
+document.addEventListener("keydown", e=>{
+  if (e.target && e.target.tagName === "INPUT") {
+    if (e.key === "Enter") $("btn-name-ok").click();
+    return;
+  }
+  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," ","Enter","Escape"].includes(e.key)) e.preventDefault();
+  if (mode==="title") {
+    if (e.key==="ArrowUp")   { titleSel=(titleSel-1+titleItems().length)%titleItems().length; sndMove(); updateTitleSel(); }
+    if (e.key==="ArrowDown") { titleSel=(titleSel+1)%titleItems().length; sndMove(); updateTitleSel(); }
+    if (e.key==="Enter"||e.key===" ") titleAction(titleItems()[titleSel].dataset.act);
+    return;
+  }
+  if (mode==="name") { if(e.key==="Enter") $("btn-name-ok").click(); return; }
+  if (mode==="msg") { if(e.key==="Enter"||e.key===" ") msgAdvance(); return; }
+  if (mode==="choice"||mode==="quiz") {
+    if (e.key==="ArrowUp")   choiceMove(-1);
+    if (e.key==="ArrowDown") choiceMove(1);
+    if (e.key==="Enter"||e.key===" ") choiceConfirm();
+    return;
+  }
+  if (mode==="field") {
+    if (e.key==="ArrowUp")    { heldDir="U"; tryMove("U"); }
+    if (e.key==="ArrowDown")  { heldDir="D"; tryMove("D"); }
+    if (e.key==="ArrowLeft")  { heldDir="L"; tryMove("L"); }
+    if (e.key==="ArrowRight") { heldDir="R"; tryMove("R"); }
+    if (e.key==="Escape"||e.key==="m"||e.key==="x") openMenu();
+    if (e.key==="Enter"||e.key===" ") {} // フィールドでは未使用
+  }
+});
+document.addEventListener("keyup", e=>{
+  const map={ArrowUp:"U",ArrowDown:"D",ArrowLeft:"L",ArrowRight:"R"};
+  if (map[e.key]===heldDir) heldDir=null;
+});
+
+// タッチ操作
+function bindHold(id, dir) {
+  const el = $(id);
+  const start = ev=>{ ev.preventDefault(); heldDir=dir; tryMove(dir); };
+  const end = ev=>{ ev.preventDefault(); if(heldDir===dir) heldDir=null; };
+  el.addEventListener("touchstart", start, {passive:false});
+  el.addEventListener("touchend", end, {passive:false});
+  el.addEventListener("mousedown", start);
+  el.addEventListener("mouseup", end);
+}
+bindHold("d-up","U"); bindHold("d-down","D"); bindHold("d-left","L"); bindHold("d-right","R");
+$("btn-a").addEventListener("click", ()=>{
+  if (mode==="msg") msgAdvance();
+  else if (mode==="choice"||mode==="quiz") choiceConfirm();
+});
+$("btn-b").addEventListener("click", ()=>{ if(mode==="field") openMenu(); });
+$("msg-win").addEventListener("click", msgAdvance);
+
+// ================= 起動 =================
+if (loadSave()) {
+  $("title-cont").style.display = "block";
+  document.querySelector('[data-act="sound"]').textContent = "おと："+(save.sound?"ON":"OFF");
+} else {
+  save = newSave();
+}
+updateTitleSel();
+requestAnimationFrame(fieldLoop);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

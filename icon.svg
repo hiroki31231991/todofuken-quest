@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="都道府県クエスト">
+  <rect width="512" height="512" rx="96" fill="#0b1020"/>
+  <rect x="48" y="56" width="416" height="400" rx="40" fill="#111827" stroke="#f8fafc" stroke-width="18"/>
+  <path d="M114 358h284v44H114z" fill="#2563eb"/>
+  <path d="M146 322h220v46H146z" fill="#22c55e"/>
+  <path d="M198 278h156v52H198z" fill="#84cc16"/>
+  <path d="M242 106h36v84h-36z" fill="#facc15"/>
+  <path d="M194 166h132v104H194z" fill="#facc15"/>
+  <path d="M170 246h180v40H170z" fill="#fb923c"/>
+  <rect x="216" y="198" width="88" height="54" rx="8" fill="#7c2d12"/>
+  <circle cx="236" cy="222" r="8" fill="#f8fafc"/>
+  <circle cx="284" cy="222" r="8" fill="#f8fafc"/>
+  <path d="M224 262h72v18h-72z" fill="#f8fafc"/>
+  <path d="M120 116h72v44h-72zM320 116h72v44h-72z" fill="#38bdf8"/>
+  <path d="M134 128h44v20h-44zM334 128h44v20h-44z" fill="#0f172a"/>
+</svg>
